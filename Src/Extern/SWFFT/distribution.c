@@ -66,6 +66,8 @@
 #define USE_SLAB_WORKAROUND 0
 #endif
 
+#define BE_VERBOSE 0
+
 enum {
   REDISTRIBUTE_1_TO_3,
   REDISTRIBUTE_3_TO_1,
@@ -306,7 +308,7 @@ void distribution_init(MPI_Comm comm,
   // Map this rank to the correct grid
   self = d->gridmap[self]; 
 
-  if (!self) 
+  if (!self && BE_VERBOSE) 
     printf("Initializing redistribution using a %s layout on %d ranks.\n",
 #ifdef PENCIL
 	   "pencil"
@@ -327,7 +329,7 @@ void distribution_init(MPI_Comm comm,
   //process_topology_1.nproc is filled with number of processors in each dim
   MPI_Dims_create(nproc, ndim, d->process_topology_1.nproc); 
 
-  if(self == 0) {
+  if(self == 0 && BE_VERBOSE) {
     printf("distribution 1D: [%d:%d:%d]\n",
 	   d->process_topology_1.nproc[0],
 	   d->process_topology_1.nproc[1],
@@ -365,7 +367,7 @@ void distribution_init(MPI_Comm comm,
   period[0] = period[1] = period[2] = 1;
   Custom3D_Dims_create(Ndims, nproc, ndim, d->process_topology_3.nproc);
 
-  if(self == 0) {
+  if(self == 0 && BE_VERBOSE) {
     printf("distribution 3D: [%d:%d:%d]\n",
 	   d->process_topology_3.nproc[0],
 	   d->process_topology_3.nproc[1],
@@ -580,7 +582,7 @@ void distribution_init(MPI_Comm comm,
   //find the cartesian coord of the current rank (for the z_pencil)
   Coord_z_pencils(self,d->process_topology_2_z.self,d);
 
-  if(self == 0) {
+  if(self == 0 && BE_VERBOSE) {
     printf("distribution 2z: [%d:%d:%d]\n",
 	   d->process_topology_2_z.nproc[0],
 	   d->process_topology_2_z.nproc[1],
@@ -745,7 +747,7 @@ void distribution_init(MPI_Comm comm,
 		  &d->process_topology_2_x.cart);
   Coord_x_pencils(self, d->process_topology_2_x.self, d);
 
-  if(self == 0) {
+  if(self == 0 && BE_VERBOSE) {
     printf("distribution 2x: [%d:%d:%d]\n",
 	   d->process_topology_2_x.nproc[0],
 	   d->process_topology_2_x.nproc[1],
@@ -910,7 +912,7 @@ void distribution_init(MPI_Comm comm,
   //find the cartesian coord of the current rank (for the y_pencil)
   Coord_y_pencils(self,d->process_topology_2_y.self,d);
 
-  if(self == 0) {
+  if(self == 0 && BE_VERBOSE) {
     printf("distribution 2y: [%d:%d:%d]\n",
 	   d->process_topology_2_y.nproc[0],
 	   d->process_topology_2_y.nproc[1],

@@ -79,6 +79,10 @@
 #include "TimingStats.h"
 #endif
 
+#ifdef _OPENMP
+#include "omp.h"
+#endif
+
 #define FFTW_ADDR(X) reinterpret_cast<fftw_complex*>(&(X)[0])
 
 namespace hacc {
@@ -493,6 +497,11 @@ public:
 #if DFFT_TIMING
     double start = MPI_Wtime();
 #endif
+    
+#ifdef _OPENMP
+    fftw_init_threads();
+    fftw_plan_with_nthreads(omp_get_max_threads());
+#endif
 
     // fs --> fo
     m_plan_f_x = fftw_plan_many_dft(1, // rank
@@ -602,6 +611,9 @@ public:
       fftw_destroy_plan(m_plan_b_z);
       fftw_destroy_plan(m_plan_b_y);
       fftw_destroy_plan(m_plan_b_x);
+#ifdef _OPENMP
+      fftw_cleanup_threads();
+#endif
     }
   }
 
