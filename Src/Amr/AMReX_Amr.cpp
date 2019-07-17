@@ -1207,9 +1207,9 @@ Amr::init (Real strt_time,
     else
     {
         initialInit(strt_time,stop_time);
-        if (check_int > 0 || check_per > 0) {
-            checkPoint();
-        }
+	if (check_int > 0 || check_per > 0) {
+	  checkPoint();
+	}
 
         if(plot_int > 0 || plot_per > 0 || plot_log_per > 0) {
             writePlotFile();
@@ -1401,7 +1401,7 @@ Amr::FinalizeInit (Real              strt_time,
         amr_level[lev]->setTimeLevel(strt_time,dt_level[lev],dt_level[lev]);
 
     for (int lev = 0; lev <= finest_level; lev++)
-        amr_level[lev]->post_regrid(0,finest_level);
+        amr_level[lev]->post_regrid(0,0,finest_level);
 
     for (int lev = 0; lev <= finest_level; lev++)
     {
@@ -1941,7 +1941,7 @@ Amr::RegridOnly (Real time, bool do_io)
     int lev_top = std::min(finest_level, max_level-1);
 
     for (int i = 0; i <= lev_top; i++)
-       regrid(i,time);
+      regrid(i,0,time);
 
     if (do_io) {
 
@@ -2022,7 +2022,7 @@ Amr::timeStep (int  level,
 		    }
 		}
 #endif
-                regrid(i,time);
+                regrid(i,iteration,time);
 
                 //
                 // Compute new dt after regrid if at level 0 and compute_new_dt_on_regrid.
@@ -2135,7 +2135,7 @@ Amr::timeStep (int  level,
 
 	int old_finest = finest_level;
 
-	regrid(level, time);
+	regrid(level,iteration, time);
 
 	if (old_finest < finest_level)
 	{
@@ -2857,6 +2857,7 @@ Amr::defBaseLevel (Real              strt_time,
 
 void
 Amr::regrid (int  lbase,
+	     int iteration,
              Real time,
              bool initial)
 {
@@ -2978,7 +2979,7 @@ Amr::regrid (int  lbase,
     //       at levels lbase+1 and higher may have changed.  
     //
     for(int lev(0); lev <= new_finest; ++lev) {
-      amr_level[lev]->post_regrid(lbase,new_finest);
+      amr_level[lev]->post_regrid(lbase,iteration,new_finest);
     }
 
     //
@@ -3078,7 +3079,7 @@ Amr::LoadBalanceLevel0 (Real time)
     BL_PROFILE("LoadBalanceLevel0()");
     const auto& dm = makeLoadBalanceDistributionMap(0, time, boxArray(0));
     InstallNewDistributionMap(0, dm);
-    amr_level[0]->post_regrid(0,time);
+    amr_level[0]->post_regrid(0,0,time);
 }
 
 void
@@ -3130,7 +3131,7 @@ Amr::regrid_level_0_on_restart()
 	this->SetBoxArray(0, amr_level[0]->boxArray());
 	this->SetDistributionMap(0, amr_level[0]->DistributionMap());
 
-	amr_level[0]->post_regrid(0,0);
+	amr_level[0]->post_regrid(0,0,0);
 	
 	if (ParallelDescriptor::IOProcessor())
 	{
@@ -3367,7 +3368,7 @@ Amr::bldFineLevels (Real strt_time)
 		new_grids[i] = amr_level[i]->boxArray();
 	    }
 
-	    regrid(0,strt_time,true);
+	    regrid(0,0,strt_time,true);
 
 	    grids_the_same = true;
 

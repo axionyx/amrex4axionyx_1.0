@@ -55,7 +55,7 @@ public:
     void InitFromScratch (Real time);
 
     //! Rebuild levels finer than lbase
-    virtual void regrid (int lbase, Real time, bool initial=false);
+    virtual void regrid (int lbase, int iteration, Real time, bool initial=false);
 
     static void Initialize ();
     static void Finalize ();

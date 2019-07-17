@@ -83,7 +83,7 @@ AmrCore::InitFromScratch (Real time)
 }
 
 void
-AmrCore::regrid (int lbase, Real time, bool)
+AmrCore::regrid (int lbase, int iteration, Real time, bool)
 {
     int new_finest;
     Vector<BoxArray> new_grids(finest_level+2);

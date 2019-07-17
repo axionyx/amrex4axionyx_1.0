@@ -349,6 +349,7 @@ protected:
     void bldFineLevels (Real start_time);
     //! Rebuild grid hierarchy finer than lbase.
     virtual void regrid (int  lbase,
+			 int  iteration,
                          Real time,
                          bool initial = false) override;
     //! Regrid level 0 on restart.

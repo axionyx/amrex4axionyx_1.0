@@ -189,7 +189,8 @@ public:
     * This is a pure virtual function and hence MUST be
     * implemented by derived classes.
     */
-    virtual  void post_regrid (int lbase,
+    virtual  void post_regrid (int lbase, 
+			       int iteration,
                                int new_finest) = 0;
     /**
     * \brief Operations to be done after initialization.
