@@ -10,6 +10,11 @@ ParticleContainer<NStructReal, NStructInt, NArrayReal, NArrayInt>
 ::tile_size { AMREX_D_DECL(1024000,8,8) };
 
 template <int NStructReal, int NStructInt, int NArrayReal, int NArrayInt>
+Real
+ParticleContainer<NStructReal, NStructInt, NArrayReal, NArrayInt>
+::part_size = 1.0;
+
+template <int NStructReal, int NStructInt, int NArrayReal, int NArrayInt>
 void
 ParticleContainer<NStructReal, NStructInt, NArrayReal, NArrayInt> :: SetParticleSize ()
 {
@@ -46,6 +51,8 @@ ParticleContainer<NStructReal, NStructInt, NArrayReal, NArrayInt> :: Initialize 
         
         ParmParse pp("particles");
         pp.query("do_tiling", do_tiling);
+	pp.query("part_size", part_size);
+
         Vector<int> tilesize(AMREX_SPACEDIM);
         if (pp.queryarr("tile_size", tilesize, 0, AMREX_SPACEDIM)) {
             for (int i=0; i<AMREX_SPACEDIM; ++i) tile_size[i] = tilesize[i];
@@ -4140,7 +4147,7 @@ AssignCellDensitySingleLevel (int rho_index,
             }
 #endif
                         
-            if (particle_lvl_offset == 0)
+            if (particle_lvl_offset == 0 && part_size == 1.0)
             {
                 AMREX_FOR_1D( np, i,
                 {
@@ -4151,7 +4158,7 @@ AssignCellDensitySingleLevel (int rho_index,
             {
                 AMREX_FOR_1D( np, i,
                 {
-                    amrex_deposit_particle_dx_cic(pstruct[i], ncomp, rhoarr, plo, dxi, pdxi);
+		    amrex_deposit_particle_dx_cic(pstruct[i], ncomp, rhoarr, plo, dxi, pdxi, part_size);
                 });
             }
                 

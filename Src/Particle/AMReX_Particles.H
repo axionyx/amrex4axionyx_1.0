@@ -716,6 +716,7 @@ public:
 
     static bool do_tiling;
     static IntVect tile_size;
+    static Real part_size;
 
     void SetLevelDirectoriesCreated(bool tf) {
       levelDirectoriesCreated = tf;

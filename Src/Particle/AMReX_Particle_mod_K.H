@@ -104,14 +104,15 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE
 void amrex_deposit_particle_dx_cic (P const& p, int nc, amrex::Array4<amrex::Real> const& rho,
                                     amrex::GpuArray<amrex::Real,AMREX_SPACEDIM> const& plo,
                                     amrex::GpuArray<amrex::Real,AMREX_SPACEDIM> const& dxi,
-                                    amrex::GpuArray<amrex::Real,AMREX_SPACEDIM> const& pdxi)
+                                    amrex::GpuArray<amrex::Real,AMREX_SPACEDIM> const& pdxi,
+				    amrex::Real const part_size)
 {
 #if (AMREX_SPACEDIM == 1)
-    amrex::Real factor = (pdxi[0]/dxi[0]);
+  amrex::Real factor = ((pdxi[0]/part_size)/dxi[0]);
 
-    amrex::Real lx = (p.pos(0) - plo[0] - 0.5/pdxi[0]) * dxi[0];
+  amrex::Real lx = (p.pos(0) - plo[0] - 0.5/(pdxi[0]/part_size)) * dxi[0];
 
-    amrex::Real hx = (p.pos(0) - plo[0] + 0.5/pdxi[0]) * dxi[0];
+  amrex::Real hx = (p.pos(0) - plo[0] + 0.5/(pdxi[0]/part_size)) * dxi[0];
 
     int lo_x = std::floor(lx);
 
@@ -135,13 +136,13 @@ void amrex_deposit_particle_dx_cic (P const& p, int nc, amrex::Array4<amrex::Rea
     }
 
 #elif (AMREX_SPACEDIM == 2)
-    amrex::Real factor = (pdxi[0]/dxi[0])*(pdxi[1]/dxi[1]);
+    amrex::Real factor = ((pdxi[0]/part_size)/dxi[0])*((pdxi[1]/part_size)/dxi[1]);
 
-    amrex::Real lx = (p.pos(0) - plo[0] - 0.5/pdxi[0]) * dxi[0];
-    amrex::Real ly = (p.pos(1) - plo[1] - 0.5/pdxi[1]) * dxi[1];
+    amrex::Real lx = (p.pos(0) - plo[0] - 0.5/(pdxi[0]/part_size)) * dxi[0];
+    amrex::Real ly = (p.pos(1) - plo[1] - 0.5/(pdxi[1]/part_size)) * dxi[1];
 
-    amrex::Real hx = (p.pos(0) - plo[0] + 0.5/pdxi[0]) * dxi[0];
-    amrex::Real hy = (p.pos(1) - plo[1] + 0.5/pdxi[1]) * dxi[1];
+    amrex::Real hx = (p.pos(0) - plo[0] + 0.5/(pdxi[0]/part_size)) * dxi[0];
+    amrex::Real hy = (p.pos(1) - plo[1] + 0.5/(pdxi[1]/part_size)) * dxi[1];
 
     int lo_x = std::floor(lx);
     int lo_y = std::floor(ly);
@@ -176,15 +177,15 @@ void amrex_deposit_particle_dx_cic (P const& p, int nc, amrex::Array4<amrex::Rea
     }
 
 #elif (AMREX_SPACEDIM == 3)
-    amrex::Real factor = (pdxi[0]/dxi[0])*(pdxi[1]/dxi[1])*(pdxi[2]/dxi[2]);
+    amrex::Real factor = ((pdxi[0]/part_size)/dxi[0])*((pdxi[1]/part_size)/dxi[1])*((pdxi[2]/part_size)/dxi[2]);
     
-    amrex::Real lx = (p.pos(0) - plo[0] - 0.5/pdxi[0]) * dxi[0];
-    amrex::Real ly = (p.pos(1) - plo[1] - 0.5/pdxi[1]) * dxi[1];
-    amrex::Real lz = (p.pos(2) - plo[2] - 0.5/pdxi[2]) * dxi[2];
+    amrex::Real lx = (p.pos(0) - plo[0] - 0.5/(pdxi[0]/part_size)) * dxi[0];
+    amrex::Real ly = (p.pos(1) - plo[1] - 0.5/(pdxi[1]/part_size)) * dxi[1];
+    amrex::Real lz = (p.pos(2) - plo[2] - 0.5/(pdxi[2]/part_size)) * dxi[2];
     
-    amrex::Real hx = (p.pos(0) - plo[0] + 0.5/pdxi[0]) * dxi[0];
-    amrex::Real hy = (p.pos(1) - plo[1] + 0.5/pdxi[1]) * dxi[1];
-    amrex::Real hz = (p.pos(2) - plo[2] + 0.5/pdxi[2]) * dxi[2];
+    amrex::Real hx = (p.pos(0) - plo[0] + 0.5/(pdxi[0]/part_size)) * dxi[0];
+    amrex::Real hy = (p.pos(1) - plo[1] + 0.5/(pdxi[1]/part_size)) * dxi[1];
+    amrex::Real hz = (p.pos(2) - plo[2] + 0.5/(pdxi[2]/part_size)) * dxi[2];
     
     int lo_x = std::floor(lx);
     int lo_y = std::floor(ly);
