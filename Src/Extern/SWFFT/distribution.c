@@ -60,6 +60,24 @@
 #include <stdlib.h>
 #include <stdint.h>
 
+void lap(const char* msg, double start)
+{
+    static double last_time=-1;
+    static double sum=0;
+    if(msg==NULL)
+    {
+        last_time=start;
+        sum=0;
+        printf("starting measurement\n");
+        return;
+    }
+    double current_time = MPI_Wtime();
+    sum += current_time-last_time;
+    printf("%s: %le, sum %le\n",msg,current_time-last_time,sum);
+    
+    last_time = current_time;
+}
+
 #include "distribution_c.h"
 
 #ifndef USE_SLAB_WORKAROUND
@@ -1529,6 +1547,8 @@ static void redistribute_2_and_3(const complex_t *a,
                                  int direction,
 				 int z_dim)
 {
+    double tstart=MPI_Wtime();
+    //lap(NULL,tstart);
   int self = d->process_topology_1.self[0];
   int npeers;
   int me=0;//determines which processor to print
@@ -1678,21 +1698,31 @@ static void redistribute_2_and_3(const complex_t *a,
 	      d2_coord[0], d2_coord[1], d2_coord[2],
 	      d2_array_start[0],d2_array_start[1],d2_array_start[2]);
     }
-    
+    //lap("before first loop",tstart);
     
     //if making cuboids from pencils, right here we need to fill the d2_chunk array with the data that later needs to be sent to a cuboid.
         //The array is a chunk of the pencil and is why we needed to calculate the starting index for the array in the local coordinates.
     if(direction == REDISTRIBUTE_2_TO_3){	
       int64_t ch_indx=0;
       int dims_size=pencil_dims[0]*pencil_dims[1]*pencil_dims[2];
+#ifdef _OPENMP
+#pragma omp parallel for
+#endif
       for(int i0=d2_array_start[0];i0<d2_array_start[0]+local_sizes[0];i0++){
-	for(int i1=d2_array_start[1];i1<d2_array_start[1]+local_sizes[1];i1++){
-	  for(int i2=d2_array_start[2];i2<d2_array_start[2]+local_sizes[2];i2++){
-	    int64_t local_indx=pencil_dims[2]*(pencil_dims[1]*i0+i1) + i2;
-	    assert(local_indx < dims_size);
-	    assert(ch_indx <chunk_size && ch_indx >= 0 && local_indx>=0 && local_indx < dims_size);
-	    d->d2_chunk[ch_indx]=a[local_indx];
-	    ch_indx++;
+          int64_t ii0 = (i0-d2_array_start[0])*local_sizes[2]*local_sizes[1];
+          int64_t il0 = pencil_dims[2]*pencil_dims[1]*i0;
+        for(int i1=d2_array_start[1];i1<d2_array_start[1]+local_sizes[1];i1++){
+            int64_t ii1 = (i1-d2_array_start[1])*local_sizes[2];
+            int64_t il1 = pencil_dims[2]*i1;
+            for(int i2=d2_array_start[2];i2<d2_array_start[2]+local_sizes[2];i2++){
+                int64_t local_indx=il0 + il1 + i2;
+                int64_t ch_indx_threaded=ii0+ii1+(i2-d2_array_start[2]);
+                //if(ch_indx!=ch_indx_threaded)
+                //	printf("bla %d %d\n",ch_indx,ch_indx_threaded);
+                assert(local_indx < dims_size);
+                assert(ch_indx <chunk_size && ch_indx >= 0 && local_indx>=0 && local_indx < dims_size);
+                d->d2_chunk[ch_indx_threaded]=a[local_indx];
+                //ch_indx++;
 	  }
 	}
       }
@@ -1772,52 +1802,82 @@ static void redistribute_2_and_3(const complex_t *a,
     }
     if(print_me && (self==me))fprintf(stderr,"D3_array_start is (%d,%d,%d) and subsizes is (%d,%d,%d) \n",d3_array_start[0],d3_array_start[1],d3_array_start[2],subsizes[0],subsizes[1],subsizes[2]);
     
-    
     //If sending cube chunks to pencils, need to fill those chunks with data here. The chunks are filled in the order 
     //such that when the pencil recieves the chunk, in its local array indexing, it assumes that the array is already 
     //filled such that it is contiguous. Therefore, complicated for-loops below fill the array in the cubes local indexing to match what the pencil will
     //expect. 
+    int64_t ch_indx=0;
     if(direction == REDISTRIBUTE_3_TO_2){
-      int64_t ch_indx=0;
       int dims_size=cube_sizes[0]*cube_sizes[1]*cube_sizes[2];
       if((self == me) && print_me)fprintf(stderr, "%d, %d, MAKE 3D Chunk...\n", self,d3_peer);
       switch(z_dim){
 	case 0:
+#ifdef _OPENMP
+#pragma omp parallel for
+#endif
 	  for(int i2=d3_array_start[y_dim];i2>d3_array_start[y_dim]-subsizes[y_dim];i2--){//perhaps y_dim
+          int64_t ii2 = (d3_array_start[y_dim]-i2)*subsizes[x_dim]*subsizes[z_dim];
 	    for(int i1=d3_array_start[x_dim];i1<d3_array_start[x_dim]+subsizes[x_dim];i1++){//perhaps x_dim
+            int64_t ii1 = (i1-d3_array_start[x_dim])*subsizes[z_dim];
+            int64_t il1 = d->process_topology_3.n[2]*i1;
 	      for(int i0=d3_array_start[z_dim];i0<d3_array_start[z_dim]+subsizes[z_dim];i0++){//perhaps z_dim
-		int64_t local_indx=d->process_topology_3.n[2]*(d->process_topology_3.n[1]*i0+i1) + i2;
+        int64_t il2 = d->process_topology_3.n[2]*d->process_topology_3.n[1]*i0;
+		int64_t local_indx=il2 + il1 + i2;
+		int64_t ch_indx_threaded = ii2+ii1+(i0-d3_array_start[z_dim]);
 		assert(local_indx < dims_size);
-		assert(ch_indx <chunk_size && ch_indx >= 0 && local_indx>=0 && local_indx < dims_size);
-		d->d3_chunk[ch_indx]=a[local_indx];
-		ch_indx++;
+		//if(ch_indx!=ch_indx_threaded)
+		//	printf("%d %d\n",ch_indx,ch_indx_threaded);
+		assert(ch_indx_threaded <chunk_size && ch_indx_threaded >= 0 && local_indx>=0 && local_indx < dims_size);
+		d->d3_chunk[ch_indx_threaded]=a[local_indx];
+		//ch_indx++;
 	      }
 	    }
 	  }
 	  break;
 	case 1:
+#ifdef _OPENMP
+#pragma omp parallel for
+#endif
 	  for(int i0=d3_array_start[y_dim];i0<d3_array_start[y_dim]+subsizes[y_dim];i0++){
+           int64_t ii0 = (i0-d3_array_start[y_dim])*subsizes[x_dim]*subsizes[z_dim];
+           int64_t il0 = d->process_topology_3.n[2]*d->process_topology_3.n[1]*i0;
 	    for(int i2=d3_array_start[x_dim];i2>d3_array_start[x_dim]-subsizes[x_dim];i2--){
+             int64_t ii2 = (d3_array_start[x_dim]-i2)*subsizes[z_dim];
 	      for(int i1=d3_array_start[z_dim];i1<d3_array_start[z_dim]+subsizes[z_dim];i1++){
-		int64_t local_indx=d->process_topology_3.n[2]*(d->process_topology_3.n[1]*i0+i1) + i2;
+        int64_t il2 = d->process_topology_3.n[2]*i1;
+
+		int64_t local_indx=il0 + il2 + i2;
+		int64_t ch_indx_threaded = ii0+ii2+(i1-d3_array_start[z_dim]);
+		//if(ch_indx!=ch_indx_threaded)
+		//	printf("case 1 %d %d\n",ch_indx,ch_indx_threaded);
 		assert(local_indx < dims_size);
 		assert(ch_indx <chunk_size && ch_indx >= 0 && local_indx>=0 && local_indx < dims_size);
-		d->d3_chunk[ch_indx]=a[local_indx];
-		ch_indx++;
+		d->d3_chunk[ch_indx_threaded]=a[local_indx];
+		//ch_indx++;
 	      }
 	    }
 	  }
 	  
 	  break;
 	case 2:
+#ifdef _OPENMP
+#pragma omp parallel for
+#endif
 	  for(int i0=d3_array_start[x_dim];i0<d3_array_start[x_dim]+subsizes[x_dim];i0++){
+          int64_t ii0 = (i0-d3_array_start[x_dim])*subsizes[y_dim]*subsizes[z_dim];
+          int64_t il0 = d->process_topology_3.n[2]*d->process_topology_3.n[1]*i0;
 	    for(int i1=d3_array_start[y_dim];i1<d3_array_start[y_dim]+subsizes[y_dim];i1++){
+            int64_t ii1 = (i1-d3_array_start[y_dim])*subsizes[z_dim];
+            int64_t il1 = d->process_topology_3.n[2]*i1;
 	      for(int i2=d3_array_start[z_dim];i2<d3_array_start[z_dim]+subsizes[z_dim];i2++){
-		int64_t local_indx=d->process_topology_3.n[2]*(d->process_topology_3.n[1]*i0+i1) + i2;
+		int64_t local_indx=il0 + il1 + i2;
+		int64_t ch_indx_threaded = ii0+ii1+(i2-d3_array_start[z_dim]);
+		//if(ch_indx!=ch_indx_threaded)
+		//	printf("case 2 %d %d\n",ch_indx,ch_indx_threaded);
 		assert(local_indx < dims_size);
 		assert(ch_indx <chunk_size && ch_indx >= 0 && local_indx>=0 && local_indx < dims_size);
-		d->d3_chunk[ch_indx]=a[local_indx];
-		ch_indx++;
+		d->d3_chunk[ch_indx_threaded]=a[local_indx];
+		//ch_indx++;
 	      }
 	    }
 	  }
@@ -1825,6 +1885,7 @@ static void redistribute_2_and_3(const complex_t *a,
 	  break;
       }
     }
+    //lap("first loop",tstart);
     
     if (DEBUG_CONDITION || ((self == me) && print_me)) {
       fprintf(stderr,
@@ -1880,6 +1941,10 @@ static void redistribute_2_and_3(const complex_t *a,
     //comunication of the chunks:
     //if print_mess boolean is set to true, then the code runs without sending any messages, and is used to test which messages would be sent in the entire run.
     //(designed to debug comm hangups, if they occur).
+    //lap("before comm",tstart);
+    
+     double start = MPI_Wtime();
+
     
     if(direction == REDISTRIBUTE_3_TO_2){
       
@@ -1904,20 +1969,34 @@ static void redistribute_2_and_3(const complex_t *a,
       if(self==me && print_me)fprintf(stderr,"REAL SUBSIZES (%d,%d,%d)\n",subsizes[x_dim],subsizes[y_dim],subsizes[z_dim]);
       if(self==me && print_me)fprintf(stderr,"PENCIL DIMENSION VS. local sizes (%d,%d,%d) vs (%d,%d,%d)\n",pencil_dims[0],pencil_dims[1],pencil_dims[2],local_sizes[0],local_sizes[1],local_sizes[2]);
       if(self==me && print_me)fprintf(stderr,"DIM_2_ARRAY_START (%d,%d,%d) \n",d2_array_start[0],d2_array_start[1],d2_array_start[2]);
-      for(int i0=d2_array_start[0];i0<d2_array_start[0]+local_sizes[0];i0++){
-	for(int i1=d2_array_start[1];i1<d2_array_start[1]+local_sizes[1];i1++){
-	  for(int i2=d2_array_start[2];i2<d2_array_start[2]+local_sizes[2];i2++){
-	    int64_t local_indx=pencil_dims[2]*(pencil_dims[1]*i0+i1) + i2;
-	    //if(self==me)fprintf(stderr,"local_indx = %d ",local_indx);
-	    //if(local_indx >= dims_size)fprintf(stderr,"WOW, in third for, dims is (%d), we are %d and my rank is %d",dims_size,local_indx,self);
-	    assert(local_indx < dims_size);
-	    assert(ch_indx <chunk_size && ch_indx >= 0 && local_indx>=0 && local_indx < dims_size);
-	    b[local_indx]=d->d2_chunk[ch_indx];
-	    //if((p==0 || p==1 || p==2 || p==3 || p==4 || p==5) && self==me)fprintf(stderr,"(%f,%f) ",real(d->d2_chunk[ch_indx]),imag(d->d2_chunk[ch_indx]));
-	    ch_indx++;
+         //lap("comm 3to2",tstart);
+
+#ifdef _OPENMP
+#pragma omp parallel for
+#endif
+    for(int i0=d2_array_start[0];i0<d2_array_start[0]+local_sizes[0];i0++){
+        int64_t ii0 = (i0-d3_array_start[0])*local_sizes[1]*local_sizes[2];
+        int64_t il0 = pencil_dims[2]*pencil_dims[1]*i0;
+        for(int i1=d2_array_start[1];i1<d2_array_start[1]+local_sizes[1];i1++){
+            int64_t ii1 = (i1-d2_array_start[1])*local_sizes[2];
+            int64_t il1 = pencil_dims[2]*i1;
+            for(int i2=d2_array_start[2];i2<d2_array_start[2]+local_sizes[2];i2++){
+                int64_t local_indx= il0 + il1 + i2;
+                int64_t ch_indx_threaded = ii0+ii1+(i2-d2_array_start[2]);
+                //if(ch_indx!=ch_indx_threaded)
+                    //printf("fill local array %d %d\n",ch_indx,ch_indx_threaded);
+                //if(self==me)fprintf(stderr,"local_indx = %d ",local_indx);
+                //if(local_indx >= dims_size)fprintf(stderr,"WOW, in third for, dims is (%d), we are %d and my rank is %d",dims_size,local_indx,self);
+                assert(local_indx < dims_size);
+                assert(ch_indx <chunk_size && ch_indx >= 0 && local_indx>=0 && local_indx < dims_size);
+                b[local_indx]=d->d2_chunk[ch_indx_threaded];
+                //if((p==0 || p==1 || p==2 || p==3 || p==4 || p==5) && self==me)fprintf(stderr,"(%f,%f) ",real(d->d2_chunk[ch_indx]),imag(d->d2_chunk[ch_indx]));
+                //ch_indx++;
 	  }
                         	}
       }
+          //lap("second (short) loop",tstart);
+
       //     if((p==0 ||p==1 || p==2 || p==3 || p==4 || p==5) && self==me)fprintf(stderr,"P is %d \n",p);
       
     } 
@@ -1936,49 +2015,82 @@ static void redistribute_2_and_3(const complex_t *a,
       if(!print_mess)MPI_Wait(&req2,MPI_STATUS_IGNORE);
       int64_t ch_indx=0;
       int dims_size=(d->process_topology_3.n[2])*(d->process_topology_3.n[1])*(d->process_topology_3.n[0]);
+    //lap("comm 2to3",tstart);
+
+      printf("z_dim is %d\n",z_dim);
       if(z_dim==0){
-	//fill the local array with the received chunk.
-	
+	//fill the local array with the received chunk.	
+#ifdef _OPENMP
+#pragma omp parallel for
+#endif
 	for(int i2=d3_array_start[y_dim];i2>d3_array_start[y_dim]-subsizes[y_dim];i2--){
+        int64_t ii2 = (d3_array_start[y_dim]-i2)*subsizes[x_dim]*subsizes[z_dim];
+        
 	  for(int i1=d3_array_start[x_dim];i1<d3_array_start[x_dim]+subsizes[x_dim];i1++){
+          int64_t ii1 = (i1-d3_array_start[x_dim])*subsizes[z_dim];
+          int64_t il1 = d->process_topology_3.n[2]*i1;
 	    for(int i0=d3_array_start[z_dim];i0<d3_array_start[z_dim]+subsizes[z_dim];i0++){
-	      int64_t local_indx=d->process_topology_3.n[2]*(d->process_topology_3.n[1]*i0+i1) + i2;
+          int64_t il2 = d->process_topology_3.n[2]*d->process_topology_3.n[1]*i0;
+	      int64_t local_indx=il2 + il1 + i2;
+	      int64_t ch_indx_threaded = ii2+ii1+(i0-d3_array_start[z_dim]);
+	      //if(ch_indx!=ch_indx_threaded)
+	    	//printf(" 0 fill local array %d %d\n",ch_indx,ch_indx_threaded);
 	      //if(local_indx >= dims_size)fprintf(stderr,"WOW, in fourth for, dims is (%d), we are %d and my rank is %d",dims_size,local_indx,self);
 	      assert(local_indx < dims_size);
 	      assert(ch_indx <chunk_size && ch_indx >= 0 && local_indx>=0 && local_indx < dims_size);
-	      b[local_indx]=d->d3_chunk[ch_indx];
+	      b[local_indx]=d->d3_chunk[ch_indx_threaded];
 	      //                         if(p==3 && self==me)fprintf(stderr,"(%f,%f) ",real(d->d3_chunk[ch_indx]),imag(d->d3_chunk[ch_indx]));
-	      ch_indx++;
+	      //ch_indx++;
 	    }
 	  }
 	}
       }
       else if(z_dim==1){
+#ifdef _OPENMP
+//#pragma omp parallel for
+#endif
 	for(int i0=d3_array_start[y_dim];i0<d3_array_start[y_dim]+subsizes[y_dim];i0++){
+        int64_t ii0 =(i0-d3_array_start[y_dim])*subsizes[x_dim]*subsizes[z_dim];
+        int64_t il0 = d->process_topology_3.n[2]*d->process_topology_3.n[1]*i0;
 	  for(int i2=d3_array_start[x_dim];i2>d3_array_start[x_dim]-subsizes[x_dim];i2--){
+          int64_t ii2 = (d3_array_start[x_dim]-i2)*subsizes[z_dim];
 	    for(int i1=d3_array_start[z_dim];i1<d3_array_start[z_dim]+subsizes[z_dim];i1++){
-	      int64_t local_indx=d->process_topology_3.n[2]*(d->process_topology_3.n[1]*i0+i1) + i2;
+          int64_t il2 = d->process_topology_3.n[2]*i1;
+	      int64_t local_indx=il0 + il2 + i2;
+	      int64_t ch_indx_threaded = ii0+ii2+(i1-d3_array_start[z_dim]);
+	      //if(ch_indx!=ch_indx_threaded)
+	    	//printf(" 1 fill local array %d %d\n",ch_indx,ch_indx_threaded);
 	      //if(local_indx >= dims_size)fprintf(stderr,"WOW, in fourth for, dims is (%d), we are %d and my rank is %d",dims_size,local_indx,self);
 	      assert(local_indx < dims_size);
 	      assert(ch_indx <chunk_size && ch_indx >= 0 && local_indx>=0 && local_indx < dims_size);
-	      b[local_indx]=d->d3_chunk[ch_indx];
+	      b[local_indx]=d->d3_chunk[ch_indx_threaded];
 	      //                             if(p==0 && self==me)fprintf(stderr,"(%f,%f) ",real(d->d3_chunk[ch_indx]),imag(d->d3_chunk[ch_indx]));
-	      ch_indx++;
+	      //ch_indx++;
 	    }
 	  }
 	}
 	
       }
       else if(z_dim==2){
+#ifdef _OPENMP
+//#pragma omp parallel for
+#endif
 	for(int i0=d3_array_start[x_dim];i0<d3_array_start[x_dim]+subsizes[x_dim];i0++){
+        int64_t ii0 = (i0-d3_array_start[x_dim])*subsizes[y_dim]*subsizes[z_dim];
+        int64_t il0 = d->process_topology_3.n[2]*d->process_topology_3.n[1]*i0;
 	  for(int i1=d3_array_start[y_dim];i1<d3_array_start[y_dim]+subsizes[y_dim];i1++){
+          int64_t ii1 = (i1-d3_array_start[y_dim])*subsizes[z_dim];
+          int64_t il1 = d->process_topology_3.n[2]*i1;
 	    for(int i2=d3_array_start[z_dim];i2<d3_array_start[z_dim]+subsizes[z_dim];i2++){
 	      int64_t local_indx=d->process_topology_3.n[2]*(d->process_topology_3.n[1]*i0+i1) + i2;
+	      int64_t ch_indx_threaded = ii0+ii1+(i2-d3_array_start[z_dim]);
+	      //if(ch_indx!=ch_indx_threaded)
+	      //  printf(" 2 fill local array %d %d\n",ch_indx,ch_indx_threaded);
 	      assert(local_indx < dims_size);
 	      assert(ch_indx <chunk_size && ch_indx >= 0 && local_indx>=0 && local_indx < dims_size);
-	      b[local_indx]=d->d3_chunk[ch_indx];
+	      b[local_indx]=d->d3_chunk[ch_indx_threaded];
 	      //                   if(p==1 && self==me)fprintf(stderr,"(%f,%f) ",real(d->d3_chunk[ch_indx]),imag(d->d3_chunk[ch_indx]));
-	      ch_indx++;
+	      //ch_indx++;
 	    }
 	  }
 	}
@@ -1987,8 +2099,9 @@ static void redistribute_2_and_3(const complex_t *a,
       else{
 	abort();
       }
+          //lap("second (long) loop",tstart);
+
     }
-    
     if (DEBUG_CONDITION) {
       fprintf(stderr,
 	      "%d: npeers,p,p0,p1,p1max=(%d,%d,%d,%d,%d), "
@@ -2014,5 +2127,6 @@ static void redistribute_2_and_3(const complex_t *a,
     if (outfile) fprintf(outfile, "   Made it all the way! for z_dim =(%d) and num_proc = (%d)...\n", z_dim, d->process_topology_1.nproc[0]);
     if (outfile) fclose(outfile);
   }
+  //lap("end",tstart);
 //    fprintf(stderr, "%d, Made it all the way!...\n", self);
 }
