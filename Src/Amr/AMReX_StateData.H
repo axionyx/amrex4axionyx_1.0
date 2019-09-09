@@ -337,12 +337,27 @@ public:
     /**
     * \brief Returns the old data.
     */
-    MultiFab& oldData () noexcept { BL_ASSERT(old_data != nullptr); return *old_data; }
+    MultiFab& oldData () noexcept { 
+#ifndef FDM_SLIM_STATE
+        BL_ASSERT(old_data != nullptr); 
+        return *old_data;
+#else
+        return *new_data;
+#endif
+        
+    }
 
     /**
     * \brief Returns the old data.
     */
-    const MultiFab& oldData () const noexcept { BL_ASSERT(old_data != nullptr); return *old_data; }
+    const MultiFab& oldData () const noexcept { 
+#ifndef FDM_SLIM_STATE
+        BL_ASSERT(old_data != nullptr);
+        return *old_data; 
+#else
+        return *new_data;
+#endif        
+    }
 
     /**
     * \brief Returns the FAB of new data at grid index `i'.
@@ -356,7 +371,14 @@ public:
     *
     * \param i
     */
-    FArrayBox& oldGrid (int i) noexcept { BL_ASSERT(old_data != nullptr); return (*old_data)[i]; }
+    FArrayBox& oldGrid (int i) noexcept { 
+#ifndef FDM_SLIM_STATE       
+        BL_ASSERT(old_data != nullptr);
+        return (*old_data)[i]; 
+#else
+        return (*new_data)[i]; 
+#endif        
+    }
 
     /**
     * \brief Returns boundary conditions of specified component on the specified grid.

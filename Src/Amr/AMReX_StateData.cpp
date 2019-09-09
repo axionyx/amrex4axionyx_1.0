@@ -51,8 +51,11 @@ StateData::StateData (StateData&& rhs) noexcept
       dmap(std::move(rhs.dmap)),
       new_time(rhs.new_time),
       old_time(rhs.old_time),
-      new_data(std::move(rhs.new_data)),
+      new_data(std::move(rhs.new_data))
+      #ifndef FDM_SLIM_STATE
+      ,
       old_data(std::move(rhs.old_data))
+#endif
 {   
 }
 
@@ -68,9 +71,12 @@ StateData::operator= (StateData const& rhs)
     old_time = rhs.old_time;
     new_data.reset(new MultiFab(grids,dmap,desc->nComp(),desc->nExtra(), MFInfo().SetTag("StateData"), *m_factory));
     MultiFab::Copy(*new_data, *rhs.new_data, 0, 0, desc->nComp(),desc->nExtra());
+    
     if (rhs.old_data) {
+#ifndef FDM_SLIM_STATE
         old_data.reset(new MultiFab(grids,dmap,desc->nComp(),desc->nExtra(), MFInfo().SetTag("StateData"), *m_factory));
         MultiFab::Copy(*old_data, *rhs.old_data, 0, 0, desc->nComp(),desc->nExtra());
+#endif
     } else {
         old_data.reset();
     }
@@ -126,12 +132,12 @@ StateData::copyOld (const StateData& state)
     
     int nc = MF.nComp();
     int ng = MF.nGrow();
-    
+#ifndef FDM_SLIM_STATE    
     BL_ASSERT(nc == (*old_data).nComp());
     BL_ASSERT(ng == (*old_data).nGrow());
-    
+
     MultiFab::Copy(*old_data, state.oldData(), 0, 0, nc, ng);
-    
+#endif    
     old_time = state.old_time;
 }
 
@@ -156,7 +162,9 @@ StateData::reset ()
 {
     new_time = old_time;
     old_time.start = old_time.stop = INVALID_TIME;
+#ifndef FDM_SLIM_STATE
     std::swap(old_data, new_data);
+#endif
 }
 
 void
@@ -210,8 +218,10 @@ StateData::restartDoit (std::istream& is, const std::string& chkfile)
                                 MFInfo().SetTag("StateData"), *m_factory));
     old_data.reset();
     if (nsets == 2) {
+#ifndef FDM_SLIM_STATE
         old_data.reset(new MultiFab(grids,dmap,desc->nComp(),desc->nExtra(),
                                     MFInfo().SetTag("StateData"), *m_factory));
+#endif
     }
     //
     // If no data is written then we just allocate the MF instead of reading it in. 
@@ -230,7 +240,12 @@ StateData::restartDoit (std::istream& is, const std::string& chkfile)
       if(ns == 1) {
 	whichMF = new_data.get();
       } else if(ns == 2) {
+#ifndef FDM_SLIM_STATE
 	whichMF = old_data.get();
+#else
+    whichMF = new_data.get();
+#endif
+    
       } else {
         amrex::Abort("**** Error in StateData::restart:  invalid nsets.");
       }
@@ -285,10 +300,12 @@ StateData::~StateData()
 void
 StateData::allocOldData ()
 {
+#ifndef FDM_SLIM_STATE
     if (old_data == nullptr)
     {
         old_data.reset(new MultiFab(grids,dmap,desc->nComp(),desc->nExtra(), MFInfo().SetTag("StateData"), *m_factory));
     }
+#endif
 }
 
 BCRec
@@ -375,13 +392,17 @@ StateData::swapTimeLevels (Real dt)
         new_time.start = new_time.stop;
         new_time.stop += dt;
     }
+    #ifndef FDM_SLIM_STATE
     std::swap(old_data, new_data);
+    #endif
 }
 
 void
 StateData::replaceOldData (MultiFab&& mf)
 {
+#ifndef FDM_SLIM_STATE
     old_data.reset(new MultiFab(std::move(mf)));
+#endif
 }
 
 // This version does NOT delete the replaced data.
@@ -389,7 +410,9 @@ StateData::replaceOldData (MultiFab&& mf)
 void
 StateData::replaceOldData (StateData& s)
 {
+    #ifndef FDM_SLIM_STATE
     std::swap(old_data, s.old_data);
+    #endif
 }
 
 void
@@ -557,7 +580,11 @@ StateData::RegisterData (MultiFabCopyDescriptor& multiFabCopyDesc,
 {
     mfid.resize(2);
     mfid[MFNEWDATA] = multiFabCopyDesc.RegisterFabArray(new_data.get());
+#ifndef FDM_SLIM_STATE
     mfid[MFOLDDATA] = multiFabCopyDesc.RegisterFabArray(old_data.get());
+#else
+    mfid[MFOLDDATA] = multiFabCopyDesc.RegisterFabArray(new_data.get());
+#endif
 }
 
 void
