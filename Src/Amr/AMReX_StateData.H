@@ -18,6 +18,10 @@
 #include <AMReX_RealBox.H>
 #include <AMReX_StateDescriptor.H>
 
+#include <iostream>
+
+#define FDM_SLIM_STATE
+
 namespace amrex {
 
 class StateDataPhysBCFunct;
