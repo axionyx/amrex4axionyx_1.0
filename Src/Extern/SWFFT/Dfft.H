@@ -66,7 +66,8 @@
 #include "complex-type.h"
 #include "Distribution.H"
 #include "Error.h"
-
+#define ALLOW_MONOLITHIC 1 //if 1, use single 3D FFT in case we have only one process.
+//#define DFFT_TIMING 1
 // DFFT_TIMING
 // 0 = no info
 // 1 = summary info
@@ -84,7 +85,7 @@
 #endif
 
 #define FFTW_ADDR(X) reinterpret_cast<fftw_complex*>(&(X)[0])
-
+#include <iostream>
 namespace hacc {
 
 class Dfft {
@@ -141,6 +142,16 @@ public:
   void forward(complex_t const *in) {
 
     if (PlansMade != true) Error() << "Dfft buffers not set";
+    int     nprocs;
+    MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
+    if(ALLOW_MONOLITHIC && nprocs==1)
+    {
+        int64_t n = local_ng_rspace(0)*local_ng_rspace(1)*local_ng_rspace(2);
+        for(int64_t i=0;i<n;i++)
+            m_fs[i] = in[i];
+        fftw_execute(m_plan_f_monolithic);
+        return;
+    }
 
 #if DFFT_TIMING
     double start, stop;
@@ -294,6 +305,16 @@ public:
   void backward(complex_t *out) {
 
     if (PlansMade != true) Error() << "Dfft buffers not set";
+    int nprocs;
+    MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
+    if(ALLOW_MONOLITHIC && nprocs==1)
+    {
+        fftw_execute(m_plan_b_monolithic);
+        int64_t n = local_ng_rspace(0)*local_ng_rspace(1)*local_ng_rspace(2);
+        for(int64_t i=0;i<n;i++)
+            out[i] = m_bs[i];
+        return;
+    }
 
 #if DFFT_TIMING
     double start, stop;
@@ -502,7 +523,17 @@ public:
     fftw_init_threads();
     fftw_plan_with_nthreads(omp_get_max_threads());
 #endif
-
+    int     nprocs;
+    MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
+    if(ALLOW_MONOLITHIC && nprocs==1)
+    {
+        m_plan_f_monolithic = fftw_plan_dft_3d(local_ng_rspace(0),local_ng_rspace(1),local_ng_rspace(2),
+                                           FFTW_ADDR(m_fs),FFTW_ADDR(m_fo),
+                                           FFTW_FORWARD, FFTW_MEASURE);
+        m_plan_b_monolithic = fftw_plan_dft_3d(local_ng_rspace(0),local_ng_rspace(1),local_ng_rspace(2),
+                                           FFTW_ADDR(m_bi),FFTW_ADDR(m_bs),
+                                           FFTW_BACKWARD, FFTW_MEASURE);
+    }
     // fs --> fo
     m_plan_f_x = fftw_plan_many_dft(1, // rank
 				    &(d.m_d.process_topology_2_x.n[0]), // const int *n,
@@ -635,6 +666,9 @@ protected:
   fftw_plan m_plan_b_z;
   fftw_plan m_plan_b_y;
   fftw_plan m_plan_b_x;
+  
+  fftw_plan m_plan_f_monolithic;
+  fftw_plan m_plan_b_monolithic;
 };
 
 } // namespace hacc
