@@ -442,6 +442,7 @@ Amr::InitAmr ()
         initial_ba.resize(in_finest);
 
         use_fixed_upto_level = in_finest;
+        use_fixed_coarse_grids = true;
         if (in_finest > max_level)
            amrex::Error("You have fewer levels in your inputs file then in your grids file!");
 
