@@ -1975,7 +1975,7 @@ static void redistribute_2_and_3(const complex_t *a,
 #pragma omp parallel for
 #endif
     for(int i0=d2_array_start[0];i0<d2_array_start[0]+local_sizes[0];i0++){
-        int64_t ii0 = (i0-d3_array_start[0])*local_sizes[1]*local_sizes[2];
+        int64_t ii0 = (i0-d2_array_start[0])*local_sizes[1]*local_sizes[2];
         int64_t il0 = pencil_dims[2]*pencil_dims[1]*i0;
         for(int i1=d2_array_start[1];i1<d2_array_start[1]+local_sizes[1];i1++){
             int64_t ii1 = (i1-d2_array_start[1])*local_sizes[2];
@@ -2017,7 +2017,7 @@ static void redistribute_2_and_3(const complex_t *a,
       int dims_size=(d->process_topology_3.n[2])*(d->process_topology_3.n[1])*(d->process_topology_3.n[0]);
     //lap("comm 2to3",tstart);
 
-      printf("z_dim is %d\n",z_dim);
+//       printf("z_dim is %d\n",z_dim);
       if(z_dim==0){
 	//fill the local array with the received chunk.	
 #ifdef _OPENMP
