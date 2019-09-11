@@ -19,8 +19,8 @@
 #include <AMReX_StateDescriptor.H>
 
 #include <iostream>
-
-#define FDM_SLIM_STATE
+//uncomment the following line to reduce the size of the state data by not allocating an old state vector. This is probably going to create havoc in many cases; do it only if you know what you are doing!
+//#define FDM_SLIM_STATE
 
 namespace amrex {
 
