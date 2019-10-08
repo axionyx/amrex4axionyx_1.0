@@ -2047,7 +2047,7 @@ static void redistribute_2_and_3(const complex_t *a,
       }
       else if(z_dim==1){
 #ifdef _OPENMP
-//#pragma omp parallel for
+#pragma omp parallel for
 #endif
 	for(int i0=d3_array_start[y_dim];i0<d3_array_start[y_dim]+subsizes[y_dim];i0++){
         int64_t ii0 =(i0-d3_array_start[y_dim])*subsizes[x_dim]*subsizes[z_dim];
@@ -2073,7 +2073,7 @@ static void redistribute_2_and_3(const complex_t *a,
       }
       else if(z_dim==2){
 #ifdef _OPENMP
-//#pragma omp parallel for
+#pragma omp parallel for
 #endif
 	for(int i0=d3_array_start[x_dim];i0<d3_array_start[x_dim]+subsizes[x_dim];i0++){
         int64_t ii0 = (i0-d3_array_start[x_dim])*subsizes[y_dim]*subsizes[z_dim];
