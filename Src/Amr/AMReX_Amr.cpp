@@ -3455,8 +3455,8 @@ Amr::initSubcycle ()
         }
         for (int i = 1; i <= max_level; i++)
         {
-            if (n_cycle[i] > MaxRefRatio(i-1))
-                amrex::Error("subcycling iterations must always be <= ref_ratio");
+            // if (n_cycle[i] > MaxRefRatio(i-1))
+            //     amrex::Error("subcycling iterations must always be <= ref_ratio");
             if (n_cycle[i] <= 0)
                 amrex::Error("subcycling iterations must always be > 0");
         }
