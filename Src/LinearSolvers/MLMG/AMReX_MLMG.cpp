@@ -640,9 +640,17 @@ MLMG::interpCorrection (int alev)
                         mlmg_lin_cc_interp_r4(tbx, ff, cc, ncomp);
                     });
                     break;
+		}
+                case 8:
+                {
+                    AMREX_LAUNCH_HOST_DEVICE_LAMBDA (bx, tbx,
+                    {
+                        mlmg_lin_cc_interp_r8(tbx, ff, cc, ncomp);
+                    });
+                    break;
                 }
                 default:
-                    amrex::Abort("mlmg_lin_cc_interp: only refratio 2 and 4 are supported");
+                    amrex::Abort("mlmg_lin_cc_interp: only refratio 2, 4, and 8 are supported");
                 }
             }
         }

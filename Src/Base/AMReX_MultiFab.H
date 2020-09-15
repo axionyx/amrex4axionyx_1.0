@@ -372,6 +372,10 @@ public:
 
     IntVect maxIndex (int comp,
                       int nghost = 0) const;
+
+    IntVect maxIndex (const Box& b,
+		      int comp,
+                      int nghost = 0) const;
     /**
     * \brief This function adds the values of the cells in mf to the corresponding
     * cells of this MultiFab.  mf is required to have the same BoxArray or

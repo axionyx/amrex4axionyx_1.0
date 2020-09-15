@@ -766,7 +766,7 @@ namespace {
 
 static IntVect
 indexFromValue (MultiFab const& mf, int comp, int nghost, Real value, MPI_Op mmloc)
-{
+{ 
     IntVect loc;
 
 #ifdef AMREX_USE_GPU
@@ -860,6 +860,102 @@ indexFromValue (MultiFab const& mf, int comp, int nghost, Real value, MPI_Op mml
     return loc;
 }
 
+static IntVect
+indexFromValue (MultiFab const& mf, const Box& b, int comp, int nghost, Real value, MPI_Op mmloc)
+{ 
+    IntVect loc;
+
+#ifdef AMREX_USE_GPU
+    if (Gpu::inLaunchRegion())
+    {
+        int tmp[1+AMREX_SPACEDIM] = {0};
+        amrex::Gpu::AsyncArray<int> aa(tmp, 1+AMREX_SPACEDIM);
+        int* p = aa.data();
+        // This is a device ptr to 1+AMREX_SPACEDIM int zeros.
+        // The first is used as an atomic bool and the others for intvect.
+        for (MFIter mfi(mf); mfi.isValid(); ++mfi) {
+            const Box& bx = b & amrex::grow(mfi.validbox(), nghost);
+            const Array4<Real const> arr = mf.array(mfi);
+            AMREX_LAUNCH_DEVICE_LAMBDA(bx, tbx,
+            {
+                int* flag = p;
+                if (*flag == 0) {
+                    const FArrayBox fab(arr);
+                    IntVect t_loc = fab.indexFromValue(value, tbx, comp);
+                    if (tbx.contains(t_loc)) {
+                        if (Gpu::Atomic::Exch(flag,1) == 0) {
+                            AMREX_D_TERM(p[1] = t_loc[0];,
+                                         p[2] = t_loc[1];,
+                                         p[3] = t_loc[2];);
+                        }
+                    }
+                }
+            });
+        }
+        aa.copyToHost(tmp, 1+AMREX_SPACEDIM);
+        AMREX_D_TERM(loc[0] = tmp[1];,
+                     loc[1] = tmp[2];,
+                     loc[2] = tmp[3];);
+    }
+    else
+#endif
+    {
+        bool f = false;
+#ifdef _OPENMP
+#pragma omp parallel
+#endif
+        {
+            IntVect priv_loc = IntVect::TheMinVector();
+            for (MFIter mfi(mf,true); mfi.isValid(); ++mfi)
+            {
+                const Box& bx = b & mfi.growntilebox(nghost);
+                const FArrayBox& fab = mf[mfi];
+                IntVect t_loc = fab.indexFromValue(value, bx, comp);
+                if (bx.contains(t_loc)) {
+                    priv_loc = t_loc;
+                };
+            }
+
+            if (priv_loc.allGT(IntVect::TheMinVector())) {
+                bool old;
+// we should be able to test on _OPENMP < 201107 for capture (version 3.1)
+// but we must work around a bug in gcc < 4.9
+#if defined(_OPENMP) && _OPENMP < 201307 // OpenMP 4.0
+#pragma omp critical (amrex_indexfromvalue)
+#elif defined(_OPENMP)
+#pragma omp atomic capture
+#endif
+                {
+                    old = f;
+                    f = true;
+                }
+
+                if (old == false) loc = priv_loc;
+            }
+        }
+    }
+
+#ifdef BL_USE_MPI
+    const int NProcs = ParallelContext::NProcsSub();
+    if (NProcs > 1)
+    {
+        struct {
+            Real mm;
+            int rank;
+        } in, out;
+        in.mm = value;
+        in.rank = ParallelContext::MyProcSub();
+        MPI_Datatype datatype = (sizeof(Real) == sizeof(double))
+            ? MPI_DOUBLE_INT : MPI_FLOAT_INT;
+        MPI_Comm comm = ParallelContext::CommunicatorSub();
+        MPI_Allreduce(&in,  &out, 1, datatype, mmloc, comm);
+        MPI_Bcast(&(loc[0]), AMREX_SPACEDIM, MPI_INT, out.rank, comm);
+    }
+#endif
+
+    return loc;
+}
+
 }
 
 IntVect
@@ -876,6 +972,14 @@ MultiFab::maxIndex (int comp, int nghost) const
     BL_ASSERT(nghost >= 0 && nghost <= n_grow.min());
     Real mx = this->max(comp, nghost, true);
     return indexFromValue(*this, comp, nghost, mx, MPI_MAXLOC);
+}
+
+IntVect
+MultiFab::maxIndex (const Box& b, int comp, int nghost) const
+{
+    BL_ASSERT(nghost >= 0 && nghost <= n_grow.min());
+    Real mx = this->max(b, comp, nghost, true);
+    return indexFromValue(*this, b, comp, nghost, mx, MPI_MAXLOC);
 }
 
 Real
